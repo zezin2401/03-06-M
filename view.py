@@ -1167,7 +1167,7 @@ def reservar_assentos():
 
     # Geração do QR Code
     nome_arquivo = f'pix_{id_reserva}.png'
-    pasta_qrcodes = os.path.join(os.getcwd(), "upload", "qrcodes")
+    pasta_qrcodes = os.path.join(os.getcwd(), "static", "upload", "qrcodes")
     imgQrCode = os.path.join(pasta_qrcodes, nome_arquivo)
 
     gerar_qrcode_pix(valor_total, nome_arquivo)
@@ -1293,7 +1293,7 @@ def mostrar_pagamento(id_reserva):
 
     nome_usuario, titulo, nome_sala, data_sessao, valor_total = dados
 
-    # Buscar assentos individualmente (sem GROUP_CONCAT)
+    # Buscar assentos individualmente
     cursor.execute("""
         SELECT a.COLUNA, a.NUMERO_ASSENTO
         FROM RESERVA_ASSENTOS ra
@@ -1302,7 +1302,6 @@ def mostrar_pagamento(id_reserva):
     """, (id_reserva,))
     assentos_resultados = cursor.fetchall()
 
-    # Monta a string dos assentos manualmente
     assentos = ', '.join([f"{col}{num}" for col, num in assentos_resultados])
 
     cursor.close()
@@ -1310,10 +1309,10 @@ def mostrar_pagamento(id_reserva):
     # Gera o QR Code
     nome_arquivo = f"pix_{id_reserva}.png"
     caminho_arquivo, nome_qr = gerar_qrcode_pix(valor_total, nome_arquivo)
-
-    qr_code_url = f"/upload/qrcodes/{nome_arquivo}"
+    qr_code_url = f"static/upload/qrcodes/{nome_arquivo}"
 
     return jsonify({
+        "id_reserva": id_reserva,
         "nome_usuario": nome_usuario,
         "titulo_filme": titulo,
         "nome_sala": nome_sala,
@@ -1407,7 +1406,7 @@ def gerar_qrcode_pix(valor_total, nome_arquivo):
         qr = qr_obj.make_image(fill_color="black", back_color="white")
 
         # Define o caminho onde o QR Code será salvo
-        pasta_qrcodes = os.path.join(os.getcwd(), "upload", "qrcodes")
+        pasta_qrcodes = os.path.join(os.getcwd(), "static", "upload", "qrcodes")
 
         # Garante que o diretório existe (cria se necessário)
         os.makedirs(pasta_qrcodes, exist_ok=True)
@@ -1533,12 +1532,9 @@ def historico_reservas_individual(id_cadastro):
     except jwt.InvalidTokenError:
         return jsonify({'mensagem': 'Token inválido'}), 401
 
-    if id_usuario_logado != id_cadastro and not verifica_adm(id_usuario_logado):
-        return jsonify({'mensagem': 'Acesso negado'}), 403
-
     cur = con.cursor()
     cur.execute("""
-        SELECT r.id_sessao, r.id_cadastro, r.valor_total,
+        SELECT r.id_reserva, r.id_sessao, r.id_cadastro, r.valor_total,
                s.id_sala, s.id_cadastrof, s.datasessao, s.valor_assento,
                c.nome AS nome_usuario,
                f.titulo AS titulo_filme,
@@ -1556,16 +1552,18 @@ def historico_reservas_individual(id_cadastro):
 
     reservas_lista = []
     for reserva in reservas:
-        data_sessao_formatada = reserva[5].strftime('%d/%m/%Y %H:%M')
+        data_sessao_formatada = reserva[6].strftime('%d/%m/%Y %H:%M')
 
         reservas_lista.append({
-            'nome_usuario': reserva[7],
-            'titulo_filme': reserva[8],
-            'nome_sala': reserva[9],
+            'id_reserva': reserva[0],
+            'id_sessao': reserva[1],
+            'id_cadastro': reserva[2],
+            'valor_total': float(reserva[3]),
+            'valor_assento': float(reserva[7]),
             'data_sessao': data_sessao_formatada,
-            'valor_assento': float(reserva[6]),
-            'valor_total': float(reserva[2]),
-            'id_sessao': reserva[0]
+            'nome_usuario': reserva[8],
+            'titulo_filme': reserva[9],
+            'nome_sala': reserva[10]
         })
 
     return jsonify({'mensagem': 'Histórico de Reservas', 'reservas': reservas_lista})
